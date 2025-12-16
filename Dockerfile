@@ -2,7 +2,8 @@
 
 ARG TS_VERSION=latest
 
-FROM golang:1.23 AS build
+FROM golang:1.25 AS build
+ENV GOTOOLCHAIN=auto
 ARG TS_VERSION
 
 WORKDIR /src
