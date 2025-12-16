@@ -1,0 +1,50 @@
+name: build-derper-to-acr
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"   # 每天 UTC 03:00（按需改）
+  push:
+    paths:
+      - "Dockerfile"
+      - ".github/workflows/build.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 取 tailscale 最新 release tag（例如 v1.90.6）
+      - name: Get latest Tailscale version tag
+        id: ver
+        run: |
+          TAG=$(curl -fsSL https://api.github.com/repos/tailscale/tailscale/releases/latest | jq -r .tag_name)
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Latest tag: $TAG"
+
+      - name: Login to ACR
+        uses: aliyun/acr-login@v1
+        with:
+          login-server: https://${{ secrets.ACR_REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+      # ACR 登录 action 官方示例就是这么用的 :contentReference[oaicite:3]{index=3}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        env:
+          REG: ${{ secrets.ACR_REGISTRY }}
+          NS: ${{ secrets.ACR_NAMESPACE }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          IMAGE="${REG}/${NS}/derper"
+          docker buildx build \
+            --platform linux/amd64 \
+            --build-arg TS_VERSION=${TAG} \
+            -t ${IMAGE}:${TAG} \
+            -t ${IMAGE}:latest \
+            --push .
